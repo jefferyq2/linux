@@ -1,5 +1,5 @@
-ifdef ISH_MESON_VARS
-	include $(ISH_MESON_VARS)
+ifneq ($(wildcard $(objtree)/meson_vars.mk),)
+        include $(objtree)/meson_vars.mk
 else
 	export ISH_CFLAGS = -I../..
 	export LIB_ISH_EMU = ../build/libish_emu.a

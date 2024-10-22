@@ -1,8 +1,8 @@
 ifneq ($(wildcard $(objtree)/meson_vars.mk),)
-        include $(objtree)/meson_vars.mk
+	include $(objtree)/meson_vars.mk
 else
 	export ISH_CFLAGS = -I../..
-	export LIB_ISH_EMU = ../build/libish_emu.a
+	export LIB_ISH_EMU = ../../build/libish_emu.a
 endif
 
 ifndef EMULATOR

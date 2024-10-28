@@ -23,9 +23,12 @@ config ISH_LINK_OBJECT
 	bool "Link the kernel into a single object file"
 endchoice
 
-config ISH_EMULATOR
-	string
-	default ishemu
+choice
+	prompt "Emulator"
+	default ISH_EMULATOR_ISHEMU
+config ISH_EMULATOR_ISHEMU
+	bool "Use iSH emulator"
+endchoice
 
 config ARCH_KALLSYMS
 	depends on KALLSYMS

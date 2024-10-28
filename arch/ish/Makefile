@@ -1,14 +1,16 @@
 ifneq ($(wildcard $(objtree)/meson_vars.mk),)
 	include $(objtree)/meson_vars.mk
 else
-	export ISH_CFLAGS = -I../..
-	export LIB_ISH_EMU = ../../build/libish_emu.a
+	export ISH_SRC = ../..
+	export ISH_BUILD = $(ISH_SRC)/build
 endif
+export ISH_CFLAGS = -I$(ISH_SRC)
+export LIB_ISH_EMU = $(ISH_BUILD)/libish_emu.a
 
-ifndef EMULATOR
-	EMULATOR := ishemu
+ifdef CONFIG_ISH_EMULATOR_ISHEMU
+	EMU_DIR = arch/ish/emu/ishemu
 endif
-export EMULATOR
+export EMU_DIR
 
 KBUILD_DEFCONFIG := ish_defconfig
 
@@ -22,11 +24,7 @@ ifdef CONFIG_HOST_DARWIN
 endif
 
 USER_CFLAGS = -I$(srctree)/arch/ish/include
-ifdef CONFIG_SMP
-	USER_CFLAGS += -DNR_CPUS=$(CONFIG_NR_CPUS)
-else
-	USER_CFLAGS += -DNR_CPUS=1
-endif
+USER_CFLAGS += -DNR_CPUS=$(or $(CONFIG_NR_CPUS),1)
 export USER_CFLAGS
 
 core-y += arch/ish/kernel/ arch/ish/mm/ arch/ish/drivers/ arch/ish/net/
@@ -34,9 +32,9 @@ ifdef CONFIG_HOST_DARWIN
 	head-y += arch/ish/kernel/sections.o
 endif
 
-core-y += arch/ish/$(EMULATOR)/
-KBUILD_CPPFLAGS += -I$(srctree)/arch/ish/include/$(EMULATOR)
-ifeq ($(EMULATOR),ishemu)
+core-y += $(EMU_DIR)/
+KBUILD_CPPFLAGS += -I$(srctree)/$(EMU_DIR)/include
+ifdef CONFIG_ISH_EMULATOR_ISHEMU
 	KBUILD_CPPFLAGS += $(ISH_CFLAGS)
 endif
 

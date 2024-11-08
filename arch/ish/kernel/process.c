@@ -72,6 +72,9 @@ static void __user_thread(void)
 				show_signal(current, "page fault", regs->cr2);
 				force_sig_fault(SIGSEGV, code, (void __user *) regs->cr2);
 			}
+		} else if (regs->trap_nr == 3) {
+			/* int3 */
+			force_sig_fault(SIGTRAP, TRAP_BRKPT, (void __user *) regs->ip);
 		} else if (interrupt == 0x80) {
 			/* syscall */
 			unsigned long (*syscall)(unsigned long, unsigned long,

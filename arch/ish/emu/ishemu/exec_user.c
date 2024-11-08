@@ -81,6 +81,14 @@ void emu_run(struct emu *emu, struct pt_regs *regs)
 	}
 }
 
+void emu_finish_fork(struct emu *emu, struct emu *next)
+{
+}
+
+void emu_destroy(struct emu *emu)
+{
+}
+
 void emu_poke_cpu(int cpu)
 {
 	__atomic_store_n(&poke[cpu], true, __ATOMIC_SEQ_CST);

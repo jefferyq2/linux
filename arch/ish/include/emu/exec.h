@@ -6,6 +6,8 @@ struct emu_mm;
 
 extern void emu_run(struct emu *emu, struct pt_regs *regs);
 extern void emu_poke_cpu(int cpu);
+extern void emu_finish_fork(struct emu *emu, struct emu *next);
+extern void emu_destroy(struct emu *emu);
 
 extern void emu_mmu_init(struct emu_mm *mm);
 extern void emu_mmu_destroy(struct emu_mm *mm);

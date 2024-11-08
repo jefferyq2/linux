@@ -143,9 +143,11 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 	if (usp) {
 		task_pt_regs(p)->sp = usp;
 	}
+	emu_finish_fork(&current->thread.emu, &p->thread.emu);
+
 	KSTK_ESP(p) = (unsigned long) task_stack_page(p) + THREAD_SIZE - sizeof(void *);
-	// AAPCS requires that that stack is quadword aligned.
 #ifdef __aarch64__
+	// AAPCS requires that that stack is quadword aligned.
 	KSTK_ESP(p) &= ~0xf;
 #endif
 	KSTK_EIP(p) = (unsigned long) __kernel_thread;
@@ -168,6 +170,10 @@ void *__switch_to(struct task_struct *from, struct task_struct *to)
 		klongjmp(to->thread.kernel_regs, (unsigned long) from);
 	/* switch_mm(last->mm, current->mm, current); */
 	return last;
+}
+
+void release_thread(struct task_struct *task) {
+	emu_destroy(&task->thread.emu);
 }
 
 unsigned long init_stack[THREAD_SIZE / sizeof(unsigned long)];

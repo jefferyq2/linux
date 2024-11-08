@@ -17,7 +17,12 @@ static __thread struct tlb the_tlb;
 
 static void *ishemu_translate(struct mmu *mem, addr_t addr, int type)
 {
-	return user_to_kernel_emu(container_of(mem, struct emu_mm, mmu), addr, type == MEM_WRITE);
+	bool writable;
+	void *ptr = user_to_kernel_emu(container_of(mem, struct emu_mm, mmu), addr, &writable);
+	if (ptr && type == MEM_WRITE && !writable) {
+		ptr = NULL;
+	}
+	return ptr;
 }
 
 static struct mmu_ops ishemu_ops = {

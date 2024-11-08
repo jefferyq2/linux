@@ -1,6 +1,7 @@
 #include <linux/mm.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <emu/kernel.h>
 
 /* TODO: put this in a header */
 extern int handle_page_fault(unsigned long address, int is_write, int *code_out);
@@ -48,11 +49,19 @@ void *user_to_kernel(struct mm_struct *mm, unsigned long virt, int is_write)
 }
 
 /* for emulators to call */
-void *user_to_kernel_emu(struct emu_mm *emu_mm, unsigned long virt, int is_write)
+void *user_to_kernel_emu(struct emu_mm *emu_mm, unsigned long virt, bool *writable)
 {
-	struct mm_struct *mm = container_of(emu_mm, struct mm_struct, context.emu_mm);
+	struct mm_struct *mm;
+	pte_t *pte;
+
+	mm = container_of(emu_mm, struct mm_struct, context.emu_mm);
 	BUG_ON(mm != current->mm);
-	return user_to_kernel(mm, virt, is_write);
+
+	pte = virt_to_pte(mm, virt);
+	if (pte == NULL || !pte_present(*pte))
+		return NULL;
+	if (writable) *writable = !!pte_write(*pte);
+	return pfn_to_virt(pte_pfn(*pte)) + (virt & ~PAGE_MASK);
 }
 
 static pte_t *maybe_map(unsigned long virt, int is_write)
@@ -83,7 +92,7 @@ static int do_op_one_page(unsigned long addr, int len, int is_write,
 	if (pte == NULL)
 		return -1;
 
-	addr = (unsigned long) page_to_virt(pte_page(*pte)) +
+	addr = (unsigned long) pfn_to_virt(pte_pfn(*pte)) +
 		(addr & ~PAGE_MASK);
 	n = (*op)(addr, len, arg);
 

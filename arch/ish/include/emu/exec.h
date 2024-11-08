@@ -4,7 +4,7 @@
 struct emu;
 struct emu_mm;
 
-extern int emu_run_to_interrupt(struct emu *emu, struct pt_regs *regs);
+extern void emu_run(struct emu *emu, struct pt_regs *regs);
 extern void emu_poke_cpu(int cpu);
 
 extern void emu_mmu_init(struct emu_mm *mm);

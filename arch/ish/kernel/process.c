@@ -11,6 +11,7 @@
 #include <emu/exec.h>
 #include <user/user.h>
 #include "threads_user.h"
+#include "irq_user.h"
 
 #include <asm/unistd.h>
 
@@ -44,73 +45,78 @@ static void show_signal(struct task_struct *task, const char *desc, unsigned lon
 static bool log_syscalls;
 core_param(log_syscalls, log_syscalls, bool, 0644);
 
-static void __user_thread(void)
+void handle_cpu_trap(void)
 {
 	struct pt_regs *regs = current_pt_regs();
+	unsigned long run_time_us;
 
-	for (;;) {
-		int interrupt;
+	run_time_us = ktime_to_us(ktime_sub(ktime_get(), current->thread.last_trap_time));
+	if (run_time_us > 50000)
+		pr_warn("emulator ran for %luus!", run_time_us);
 
-		local_irq_disable();
-		interrupt = emu_run_to_interrupt(&current->thread.emu, current_pt_regs());
-		local_irq_enable();
-		regs->trap_nr = interrupt;
-		regs->orig_ax = regs->ax;
+	check_irqs();
 
-		if (interrupt == 6) {
-			/* undefined instruction */
-			char buf[16];
-			show_signal(current, "invalid opcode", regs->ip);
-			if (copy_from_user_nofault(buf, (void * __user) regs->ip, sizeof(buf)) == 0)
-				printk("%s[%d] invalid code: %16ph\n", current->comm, task_pid_nr(current), buf);
-			force_sig_fault(SIGILL, SI_KERNEL, (void __user *) regs->ip);
-		} else if (interrupt == 13 || interrupt == 14) {
-			/* GPF or page fault */
-			int code;
-			int err = handle_page_fault(regs->cr2, regs->error_code & 2, &code);
-			if (err != 0) {
-				show_signal(current, "page fault", regs->cr2);
-				force_sig_fault(SIGSEGV, code, (void __user *) regs->cr2);
-			}
-		} else if (regs->trap_nr == 3) {
-			/* int3 */
-			force_sig_fault(SIGTRAP, TRAP_BRKPT, (void __user *) regs->ip);
-		} else if (interrupt == 0x80) {
-			/* syscall */
-			unsigned long (*syscall)(unsigned long, unsigned long,
-						 unsigned long, unsigned long,
-						 unsigned long, unsigned long);
-
-			if (regs->orig_ax > NR_syscalls) {
-				show_signal(current, "syscall out of range", regs->orig_ax);
-				force_sig_fault(SIGSYS, SI_KERNEL, 0);
-				goto signal;
-			}
-			syscall = sys_call_table[regs->orig_ax];
-
-			if (trace_syscall_enter(regs))
-				goto signal;
-			regs->ax = syscall(regs->bx, regs->cx, regs->dx,
-					   regs->si, regs->di, regs->bp);
-			if (log_syscalls) {
-				printk("%s[%d] syscall %d(%#x, %#x, %#x) -> %d\n",
-				       current->comm, current->pid,
-				       regs->orig_ax, regs->bx, regs->cx,
-				       regs->dx, regs->ax);
-			}
-			trace_syscall_exit(regs);
-		} else if (interrupt == 0x20) {
-			/* timer */
-		} else {
-			show_signal(current, "mysterious interrupt", interrupt);
-			force_sig_fault(SIGSEGV, SI_KERNEL, 0);
+	regs->orig_ax = regs->ax;
+	if (regs->trap_nr == 6) {
+		/* undefined instruction */
+		char buf[16];
+		show_signal(current, "invalid opcode", regs->ip);
+		if (copy_from_user_nofault(buf, (void * __user) regs->ip, sizeof(buf)) == 0)
+			printk("%s[%d] invalid code: %16ph\n", current->comm, task_pid_nr(current), buf);
+		force_sig_fault(SIGILL, SI_KERNEL, (void __user *) regs->ip);
+	} else if (regs->trap_nr == 13 || regs->trap_nr == 14) {
+		/* GPF or page fault */
+		int code;
+		int err = handle_page_fault(regs->cr2, regs->error_code & 2, &code);
+		if (err != 0) {
+			show_signal(current, "page fault", regs->cr2);
+			force_sig_fault(SIGSEGV, code, (void __user *) regs->cr2);
 		}
+	} else if (regs->trap_nr == 3) {
+		/* int3 */
+		force_sig_fault(SIGTRAP, TRAP_BRKPT, (void __user *) regs->ip);
+	} else if (regs->trap_nr == 0x80) {
+		/* syscall */
+		unsigned long (*syscall)(unsigned long, unsigned long,
+					 unsigned long, unsigned long,
+					 unsigned long, unsigned long);
+
+		if (regs->orig_ax > NR_syscalls) {
+			show_signal(current, "syscall out of range", regs->orig_ax);
+			force_sig_fault(SIGSYS, SI_KERNEL, 0);
+			goto signal;
+		}
+		syscall = sys_call_table[regs->orig_ax];
+
+		if (trace_syscall_enter(regs))
+			goto signal;
+		regs->ax = syscall(regs->bx, regs->cx, regs->dx,
+				   regs->si, regs->di, regs->bp);
+		if (log_syscalls) {
+			printk("%s[%d] syscall %d(%#x, %#x, %#x) -> %d\n",
+			       current->comm, current->pid,
+			       regs->orig_ax, regs->bx, regs->cx,
+			       regs->dx, regs->ax);
+		}
+		trace_syscall_exit(regs);
+	} else if (regs->trap_nr == 0x20) {
+		/* timer */
+	} else {
+		show_signal(current, "mysterious interrupt", regs->trap_nr);
+		force_sig_fault(SIGSEGV, SI_KERNEL, 0);
+	}
 
 signal:
-		if (need_resched())
-			schedule();
-		do_signal(regs);
-	}
+	if (need_resched())
+		schedule();
+	do_signal(regs);
+
+	current->thread.last_trap_time = ktime_get();
+}
+
+static void __user_thread(void)
+{
+	emu_run(&current->thread.emu, current_pt_regs());
 }
 
 static void __kernel_thread(struct task_struct *last)

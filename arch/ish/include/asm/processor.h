@@ -3,14 +3,10 @@
 
 #ifndef __ASSEMBLY__
 
+#include <linux/ktime.h>
 #include <asm/ptrace.h>
 #include <emu/emu.h>
 #include <user/setjmp.h>
-
-/* This sucks, but is here so the file can be included from user code. */
-#ifndef __always_inline
-#define __always_inline inline
-#endif
 
 struct task_struct;
 
@@ -34,6 +30,7 @@ struct thread_struct {
 		void (*func)(void *);
 		void *arg;
 	} request;
+	ktime_t last_trap_time;
 };
 #define INIT_THREAD \
 { \

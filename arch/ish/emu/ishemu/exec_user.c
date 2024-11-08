@@ -1,7 +1,8 @@
 #include <stdlib.h>
-#include <asm/processor.h>
+#include <asm/ptrace.h>
 #include <emu/emu.h>
 #include <emu/exec.h>
+#include <emu/kernel.h>
 #include "../kernel/irq_user.h"
 
 #include "emu/cpu.h"
@@ -11,9 +12,6 @@
 #include "asbestos/asbestos.h"
 
 extern int current_pid(void);
-
-extern void *user_to_kernel_emu(struct emu_mm *emu_mm, unsigned long virt, int is_write);
-extern void handle_interrupt(int interrupt, unsigned long fault_addr, int is_write);
 
 static __thread struct tlb the_tlb;
 
@@ -30,7 +28,7 @@ extern unsigned long (*sys_call_table[])(unsigned long, unsigned long, unsigned 
 
 static bool poke[NR_CPUS];
 
-int emu_run_to_interrupt(struct emu *emu, struct pt_regs *regs)
+static void emu_run_to_interrupt(struct emu *emu, struct pt_regs *regs)
 {
 	emu->cpu.eax = regs->ax;
 	emu->cpu.ebx = regs->bx;
@@ -67,7 +65,15 @@ int emu_run_to_interrupt(struct emu *emu, struct pt_regs *regs)
 	} else {
 		regs->cr2 = regs->error_code = 0;
 	}
-	return interrupt;
+	regs->trap_nr = interrupt;
+}
+
+void emu_run(struct emu *emu, struct pt_regs *regs)
+{
+	for (;;) {
+		emu_run_to_interrupt(emu, regs);
+		handle_cpu_trap();
+	}
 }
 
 void emu_poke_cpu(int cpu)

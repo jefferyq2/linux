@@ -1,12 +1,21 @@
 #ifndef __ASM_ISH_PAGE_H
 #define __ASM_ISH_PAGE_H
-#include <linux/const.h>
 
 #define PAGE_SHIFT	12
 #define PAGE_SIZE	(_UL(1) << PAGE_SHIFT)
 #define PAGE_MASK	(~(PAGE_SIZE-1))
 
 #ifndef __ASSEMBLY__
+
+extern unsigned long ish_phys_base;
+extern unsigned long ish_phys_size;
+#define __pa(virt)	((unsigned long) (virt) - ish_phys_base)
+#define __va(phys)	((void *) ((unsigned long) (phys) + ish_phys_base))
+#define PAGE_OFFSET (ish_phys_base)
+
+#ifdef __KERNEL__
+
+#include <linux/const.h>
 
 typedef struct {
 	unsigned long pte;
@@ -31,12 +40,6 @@ typedef struct page *pgtable_t;
 #define pgprot_val(x)	((x).pgprot)
 #define __pgprot(x)	((pgprot_t) { (x) })
 
-extern unsigned long ish_phys_base;
-extern unsigned long ish_phys_size;
-#define __pa(virt)	((unsigned long) (virt) - ish_phys_base)
-#define __va(phys)	((void *) ((unsigned long) (phys) + ish_phys_base))
-#define PAGE_OFFSET (ish_phys_base)
-
 #define pfn_valid(pfn)		((pfn) < max_mapnr)
 #define phys_to_pfn(p)		((p) >> PAGE_SHIFT)
 #define page_to_phys(page)	(page_to_pfn(page) << PAGE_SHIFT)
@@ -54,8 +57,10 @@ extern unsigned long ish_phys_size;
 #define VMALLOC_START 0x10000
 #define VMALLOC_END (PAGE_OFFSET - 1)
 
-#endif /* !__ASSEMBLY__ */
-
 #include <asm-generic/getorder.h>
+
+#endif /* __KERNEL__ */
+
+#endif /* !__ASSEMBLY__ */
 
 #endif

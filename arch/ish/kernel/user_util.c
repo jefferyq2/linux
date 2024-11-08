@@ -2,9 +2,6 @@
 #include <asm/pgtable.h>
 #include <linux/stdarg.h>
 
-#include "emu/interrupt.h"
-#include "emu/cpu.h"
-
 // linker error fixes
 int current_pid(void)
 {

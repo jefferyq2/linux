@@ -103,8 +103,6 @@ void emu_mmu_destroy(struct emu_mm *mm)
 }
 
 void emu_switch_mm(struct emu *emu, struct emu_mm *mm) {
-	if (!mm)
-		return;
 	if (mm->mmu.asbestos == NULL)
 		emu_mmu_init( mm);
 	emu->cpu.mmu = &mm->mmu;

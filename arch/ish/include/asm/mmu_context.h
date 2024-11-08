@@ -33,7 +33,10 @@ static inline void switch_mm(struct mm_struct *prev,
 			struct task_struct *tsk)
 {
 	int cpu = smp_processor_id();
-	emu_switch_mm(&tsk->thread.emu, next ? &next->context.emu_mm : NULL);
+	BUG_ON(next != tsk->mm);
+	if (next != NULL) {
+		emu_switch_mm(&tsk->thread.emu, next ? &next->context.emu_mm : NULL);
+	}
 	cpumask_clear_cpu(cpu, mm_cpumask(prev));
 	cpumask_set_cpu(cpu, mm_cpumask(next));
 }

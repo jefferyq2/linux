@@ -1,8 +1,7 @@
 #include <linux/mm.h>
 #include <asm/tlbflush.h>
 #include <asm/processor.h>
-
-extern void emu_flush_tlb_local(struct emu_mm *mm, unsigned long start, unsigned long end);
+#include <emu/exec.h>
 
 struct flush_tlb_args {
 	struct emu_mm *mm;

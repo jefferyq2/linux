@@ -28,6 +28,8 @@ choice
 	default ISH_EMULATOR_ISHEMU
 config ISH_EMULATOR_ISHEMU
 	bool "Use iSH emulator"
+config ISH_EMULATOR_UNICORN
+	bool "Use unicorn emulator"
 endchoice
 
 config ARCH_KALLSYMS

@@ -9,6 +9,8 @@ export LIB_ISH_EMU = $(ISH_BUILD)/libish_emu.a
 
 ifdef CONFIG_ISH_EMULATOR_ISHEMU
 	EMU_DIR = arch/ish/emu/ishemu
+else ifdef CONFIG_ISH_EMULATOR_UNICORN
+	EMU_DIR = arch/ish/emu/unicorn
 endif
 export EMU_DIR
 

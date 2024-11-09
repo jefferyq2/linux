@@ -25,7 +25,9 @@ endchoice
 
 choice
 	prompt "Emulator"
-	default ISH_EMULATOR_ISHEMU
+	default ISH_EMULATOR_NONE
+config ISH_EMULATOR_NONE
+	bool "Don't include any emulator (must be provided by a module)"
 config ISH_EMULATOR_ISHEMU
 	bool "Use iSH emulator"
 config ISH_EMULATOR_UNICORN

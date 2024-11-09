@@ -12,7 +12,6 @@ ifdef CONFIG_ISH_EMULATOR_ISHEMU
 else ifdef CONFIG_ISH_EMULATOR_UNICORN
 	EMU_DIR = arch/ish/emu/unicorn
 endif
-export EMU_DIR
 
 KBUILD_DEFCONFIG := ish_defconfig
 
@@ -34,8 +33,10 @@ ifdef CONFIG_HOST_DARWIN
 	head-y += arch/ish/kernel/sections.o
 endif
 
-core-y += $(EMU_DIR)/
-KBUILD_CPPFLAGS += -I$(srctree)/$(EMU_DIR)/include
+ifndef CONFIG_ISH_EMULATOR_NONE
+	core-y += $(EMU_DIR)/
+	KBUILD_CPPFLAGS += -I$(srctree)/$(EMU_DIR)/include
+endif
 ifdef CONFIG_ISH_EMULATOR_ISHEMU
 	KBUILD_CPPFLAGS += $(ISH_CFLAGS)
 endif

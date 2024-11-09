@@ -1,3 +1,4 @@
+#include <linux/const.h>
 #include <asm-generic/vmlinux.lds.h>
 #include <asm/page.h>
 #include <asm/cache.h>

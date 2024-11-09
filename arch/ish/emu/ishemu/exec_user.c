@@ -1,6 +1,6 @@
+#include <stdbool.h>
 #include <stdlib.h>
 #include <asm/ptrace.h>
-#include <emu/emu.h>
 #include <emu/exec.h>
 #include <emu/kernel.h>
 #include "../kernel/irq_user.h"
@@ -13,12 +13,18 @@
 
 extern int current_pid(void);
 
+struct emu_mm_ctx {
+	struct mmu mmu;
+	struct emu_mm *emu_mm;
+};
+
 static __thread struct tlb the_tlb;
 
 static void *ishemu_translate(struct mmu *mem, addr_t addr, int type)
 {
+	struct emu_mm *emu_mm = container_of(mem, struct emu_mm_ctx, mmu)->emu_mm;
 	bool writable;
-	void *ptr = user_to_kernel_emu(container_of(mem, struct emu_mm, mmu), addr, &writable);
+	void *ptr = user_to_kernel_emu(emu_mm, addr, &writable);
 	if (ptr && type == MEM_WRITE && !writable) {
 		ptr = NULL;
 	}
@@ -29,60 +35,74 @@ static struct mmu_ops ishemu_ops = {
 	.translate = ishemu_translate,
 };
 
-extern unsigned long (*sys_call_table[])(unsigned long, unsigned long, unsigned long, unsigned long, unsigned long, unsigned long);
-
 static bool poke[NR_CPUS];
 
-static void emu_run_to_interrupt(struct emu *emu, struct pt_regs *regs)
+static void emu_run_to_interrupt(struct emu *emu, struct cpu_state *cpu)
 {
-	emu->cpu.eax = regs->ax;
-	emu->cpu.ebx = regs->bx;
-	emu->cpu.ecx = regs->cx;
-	emu->cpu.edx = regs->dx;
-	emu->cpu.esi = regs->si;
-	emu->cpu.edi = regs->di;
-	emu->cpu.ebp = regs->bp;
-	emu->cpu.esp = regs->sp;
-	emu->cpu.eip = regs->ip;
-	emu->cpu.eflags = regs->flags;
-	emu->cpu.tls_ptr = regs->tls;
-	expand_flags(&emu->cpu);
-	emu->cpu.poked_ptr = &poke[get_smp_processor_id()];
+	struct pt_regs *regs = emu_pt_regs(emu);
+	struct emu_mm_ctx *mm_ctx = emu->mm->ctx;
 
-	int interrupt = cpu_run_to_interrupt(&emu->cpu, &the_tlb);
+	cpu->mmu = &mm_ctx->mmu;
+	cpu->eax = regs->ax;
+	cpu->ebx = regs->bx;
+	cpu->ecx = regs->cx;
+	cpu->edx = regs->dx;
+	cpu->esi = regs->si;
+	cpu->edi = regs->di;
+	cpu->ebp = regs->bp;
+	cpu->esp = regs->sp;
+	cpu->eip = regs->ip;
+	cpu->eflags = regs->flags;
+	cpu->tls_ptr = regs->tls;
+	expand_flags(cpu);
+	cpu->poked_ptr = &poke[get_smp_processor_id()];
 
-	collapse_flags(&emu->cpu);
-	regs->ax = emu->cpu.eax;
-	regs->bx = emu->cpu.ebx;
-	regs->cx = emu->cpu.ecx;
-	regs->dx = emu->cpu.edx;
-	regs->si = emu->cpu.esi;
-	regs->di = emu->cpu.edi;
-	regs->bp = emu->cpu.ebp;
-	regs->sp = emu->cpu.esp;
-	regs->ip = emu->cpu.eip;
-	regs->flags = emu->cpu.eflags;
-	regs->tls = emu->cpu.tls_ptr;
+	int interrupt = cpu_run_to_interrupt(cpu, &the_tlb);
+
+	collapse_flags(cpu);
+	regs->ax = cpu->eax;
+	regs->bx = cpu->ebx;
+	regs->cx = cpu->ecx;
+	regs->dx = cpu->edx;
+	regs->si = cpu->esi;
+	regs->di = cpu->edi;
+	regs->bp = cpu->ebp;
+	regs->sp = cpu->esp;
+	regs->ip = cpu->eip;
+	regs->flags = cpu->eflags;
+	regs->tls = cpu->tls_ptr;
 
 	if (interrupt == INT_GPF) {
-		regs->cr2 = emu->cpu.segfault_addr;
-		regs->error_code = emu->cpu.segfault_was_write << 1;
+		regs->cr2 = cpu->segfault_addr;
+		regs->error_code = cpu->segfault_was_write << 1;
 	} else {
 		regs->cr2 = regs->error_code = 0;
 	}
 	regs->trap_nr = interrupt;
 }
 
-void emu_run(struct emu *emu, struct pt_regs *regs)
+void emu_run(struct emu *emu)
 {
+	struct cpu_state cpu = {};
+	if (emu->snapshot) {
+		struct cpu_state *snapshot = emu->snapshot;
+		cpu = *snapshot;
+		free(snapshot);
+		emu->snapshot = NULL;
+	}
+	emu->ctx = &cpu;
 	for (;;) {
-		emu_run_to_interrupt(emu, regs);
-		handle_cpu_trap();
+		emu_run_to_interrupt(emu, &cpu);
+		handle_cpu_trap(emu);
 	}
 }
 
-void emu_finish_fork(struct emu *emu, struct emu *next)
+void emu_finish_fork(struct emu *emu)
 {
+	struct cpu_state *cpu = emu->ctx;
+	struct cpu_state *snapshot = emu->snapshot = calloc(1, sizeof(*snapshot));
+	*snapshot = *cpu;
+	emu->ctx = NULL;
 }
 
 void emu_destroy(struct emu *emu)
@@ -99,25 +119,28 @@ void emu_flush_tlb_local(struct emu_mm *mm, unsigned long start, unsigned long e
 	if (the_tlb.mmu == NULL)
 		return;
 	tlb_flush(&the_tlb);
-	if (mm->mmu.asbestos != NULL)
-		asbestos_invalidate_range(mm->mmu.asbestos, start / PAGE_SIZE, (end + PAGE_SIZE - 1) / PAGE_SIZE /* TODO DIV_ROUND_UP? */);
+	struct emu_mm_ctx *mm_ctx = mm->ctx;
+	if (mm_ctx->mmu.asbestos != NULL)
+		asbestos_invalidate_range(mm_ctx->mmu.asbestos, start / PAGE_SIZE, (end + PAGE_SIZE - 1) / PAGE_SIZE /* TODO DIV_ROUND_UP? */);
 }
 
 void emu_mmu_init(struct emu_mm *mm)
 {
-	mm->mmu.asbestos = asbestos_new(&mm->mmu);
-	mm->mmu.ops = &ishemu_ops;
+	struct emu_mm_ctx *mm_ctx = mm->ctx = calloc(1, sizeof(*mm_ctx));
+	mm_ctx->emu_mm = mm;
+	mm_ctx->mmu.asbestos = asbestos_new(&mm_ctx->mmu);
+	mm_ctx->mmu.ops = &ishemu_ops;
 }
 
 void emu_mmu_destroy(struct emu_mm *mm)
 {
-	asbestos_free(mm->mmu.asbestos);
-	mm->mmu.asbestos = NULL;
+	struct emu_mm_ctx *mm_ctx = mm->ctx;
+	asbestos_free(mm_ctx->mmu.asbestos);
+	mm_ctx->mmu.asbestos = NULL;
 }
 
-void emu_switch_mm(struct emu *emu, struct emu_mm *mm) {
-	if (mm->mmu.asbestos == NULL)
-		emu_mmu_init( mm);
-	emu->cpu.mmu = &mm->mmu;
-	tlb_refresh(&the_tlb, &mm->mmu);
+void emu_switch_mm(struct emu *emu, struct emu_mm *mm)
+{
+	struct emu_mm_ctx *mm_ctx = mm->ctx;
+	tlb_refresh(&the_tlb, &mm_ctx->mmu);
 }

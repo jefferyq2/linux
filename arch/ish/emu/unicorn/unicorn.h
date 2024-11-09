@@ -6,6 +6,12 @@
 #include <stdbool.h>
 #endif
 
+struct emu_uc {
+	struct uc_struct *uc;
+	unsigned long tls_ptr;
+	unsigned long mm_flush_count;
+};
+
 extern bool unicorn_trace;
 
 #endif

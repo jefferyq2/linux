@@ -4,8 +4,6 @@
 #include <asm-generic/mm_hooks.h>
 #include <emu/exec.h>
 
-/* Dear future traveller: This is the wrong abstraction, don't feel bad about tearing it apart. */
-
 static inline void enter_lazy_tlb(struct mm_struct *mm,
 			struct task_struct *tsk)
 {
@@ -35,7 +33,8 @@ static inline void switch_mm(struct mm_struct *prev,
 	int cpu = smp_processor_id();
 	BUG_ON(next != tsk->mm);
 	if (next != NULL) {
-		emu_switch_mm(&tsk->thread.emu, next ? &next->context.emu_mm : NULL);
+		tsk->thread.emu.mm = &next->context.emu_mm;
+		emu_switch_mm(&tsk->thread.emu, &next->context.emu_mm);
 	}
 	cpumask_clear_cpu(cpu, mm_cpumask(prev));
 	cpumask_set_cpu(cpu, mm_cpumask(next));

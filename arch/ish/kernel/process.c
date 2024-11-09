@@ -42,12 +42,17 @@ static void show_signal(struct task_struct *task, const char *desc, unsigned lon
 	}
 }
 
+struct pt_regs *emu_pt_regs(struct emu *emu)
+{
+	return &container_of(emu, struct thread_struct, emu)->regs;
+}
+
 static bool log_syscalls;
 core_param(log_syscalls, log_syscalls, bool, 0644);
 
-void handle_cpu_trap(void)
+void handle_cpu_trap(struct emu *emu)
 {
-	struct pt_regs *regs = current_pt_regs();
+	struct pt_regs *regs = emu_pt_regs(emu);
 	unsigned long run_time_us;
 
 	run_time_us = ktime_to_us(ktime_sub(ktime_get(), current->thread.last_trap_time));
@@ -116,7 +121,7 @@ signal:
 
 static void __user_thread(void)
 {
-	emu_run(&current->thread.emu, current_pt_regs());
+	emu_run(&current->thread.emu);
 }
 
 static void __kernel_thread(struct task_struct *last)
@@ -143,7 +148,9 @@ int copy_thread(unsigned long clone_flags, unsigned long usp,
 	if (usp) {
 		task_pt_regs(p)->sp = usp;
 	}
-	emu_finish_fork(&current->thread.emu, &p->thread.emu);
+	if (p->thread.emu.ctx != NULL) {
+		emu_finish_fork(&p->thread.emu);
+	}
 
 	KSTK_ESP(p) = (unsigned long) task_stack_page(p) + THREAD_SIZE - sizeof(void *);
 #ifdef __aarch64__

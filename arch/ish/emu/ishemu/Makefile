@@ -1,5 +1,5 @@
 ccflags-y += $(ISH_CFLAGS)
-USER_CFLAGS += $(ISH_CFLAGS) -I$(srctree)/$(EMU_DIR)/include
+USER_CFLAGS += $(ISH_CFLAGS)
 
 obj-y = exec_user.o
 

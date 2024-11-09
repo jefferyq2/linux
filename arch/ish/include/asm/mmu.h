@@ -1,7 +1,7 @@
 #ifndef __ASM_ISH_MMU_H
 #define __ASM_ISH_MMU_H
 
-#include <emu/emu.h>
+#include <emu/exec.h>
 
 typedef struct mm_context {
 	struct emu_mm emu_mm;

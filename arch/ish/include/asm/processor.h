@@ -5,7 +5,7 @@
 
 #include <linux/ktime.h>
 #include <asm/ptrace.h>
-#include <emu/emu.h>
+#include <emu/exec.h>
 #include <user/setjmp.h>
 
 struct task_struct;
